@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { width: 280px; padding: 16px; font-family: system-ui, sans-serif; margin: 0; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    .status { padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 6px; background: #111; color: #fff; cursor: pointer; font-size: 13px; }
+    .btn:hover { background: #333; }
+    .info { font-size: 12px; color: #666; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>YTMP3 Companion</h1>
+  <div id="status" class="status">Checking...</div>
+  <button id="openCompanion" class="btn" style="display:none;">Open Companion</button>
+  <div class="info">The companion app must be running on your computer to download videos.</div>
+  <script src="popup.js"></script>
+</body>
+</html>

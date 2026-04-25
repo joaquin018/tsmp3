@@ -1,10 +1,6 @@
 ---
 import '../styles/global.css';
-import '../styles/components/toast.css';
-import Terminal from '../components/Terminal.astro';
-import DropOverlay from '../components/DropOverlay.astro';
 import YouTubeForm from '../components/YouTubeForm.astro';
-import AnalysisSection from '../components/AnalysisSection.astro';
 ---
 
 <html lang="es">
@@ -13,140 +9,14 @@ import AnalysisSection from '../components/AnalysisSection.astro';
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
-    <title>TST MP3 Downloader</title>
-    
-    <script is:inline src="/lib/tfjs/tf.min.js"></script>
-    <script is:inline src="/lib/essentia/essentia-wasm.umd.js"></script>
-    <script is:inline src="/lib/essentia/essentia.js-core.umd.js"></script>
-    <script is:inline src="/lib/essentia/essentia.js-extractor.umd.js"></script>
-    <script is:inline src="/lib/essentia/essentia.js-model.umd.js"></script>
+    <title>YouTube to MP3</title>
 </head>
 <body>
-    <Terminal />
-    <DropOverlay />
-
     <div class="main-content">
-        <div class="app-layout" id="appLayout">
-            <!-- Left Spacer (to keep center centered) -->
-            <div class="layout-spacer"></div>
-
-            <!-- Main Downloader Card -->
-            <div class="container main-app">
-                <div class="version">v0.4.1</div>
-                <h1>YouTube to MP3</h1>
-                <p class="subtitle"></p>
-
-                <YouTubeForm />
-                
-                <div class="app-actions">
-                    <button id="toggleAnalyzer" class="secondary-btn">
-                        <span class="icon">📊</span> Analyzer
-                    </button>
-                </div>
-            </div>
-
-            <!-- Right Side: Analysis Panel -->
-            <div class="analyzer-panel" id="analyzerPanel">
-                <AnalysisSection />
-            </div>
+        <div class="container main-app">
+            <h1>YouTube to MP3</h1>
+            <YouTubeForm />
         </div>
     </div>
-
-    <script>
-        import { log } from '../scripts/logger';
-        import { resetResults } from '../scripts/consensus';
-        import { runAnalysisFlow, runStructuralMapping, setAudioState } from '../scripts/audioProcessor';
-        import { showToast } from '../scripts/notifications';
-
-        window.addEventListener('audio-ready', async (e: any) => {
-            const { filename, buffer } = e.detail;
-
-            // Si hay buffer, es un Drag & Drop -> Abrir Analyzer automáticamente
-            if (buffer) {
-                const appLayout = document.querySelector('#appLayout');
-                const toggleBtn = document.querySelector('#toggleAnalyzer');
-                appLayout?.classList.add('show-analyzer');
-                toggleBtn?.classList.add('active');
-            }
-
-            await startAnalysis(filename, buffer);
-        });
-
-        async function startAnalysis(filename: string | null, externalBuffer: ArrayBuffer | null = null) {
-            const analysisSection = document.querySelector('#analysisSection') as HTMLElement;
-            const termStatus = document.getElementById('terminalStatus');
-            
-            if (termStatus) termStatus.textContent = 'BUSY';
-
-            resetResults();
-
-            // Si es un Drag & Drop o acabamos de abrir el panel, damos un respiro a la UI
-            // para que la animación de apertura sea fluida antes de bloquear el hilo con TF.js
-            const appLayout = document.querySelector('#appLayout');
-            if (appLayout?.classList.contains('show-analyzer')) {
-                await new Promise(resolve => setTimeout(resolve, 600)); // Esperamos a que termine la transicion (0.5s)
-            }
-
-            try {
-                let arrayBuffer: ArrayBuffer;
-
-                if (externalBuffer) {
-                    arrayBuffer = externalBuffer;
-                } else if (filename) {
-                    log(`📥 Descargando audio: ${filename}`);
-                    const response = await fetch(`/api/get-audio?filename=${encodeURIComponent(filename)}`);
-                    arrayBuffer = await response.arrayBuffer();
-                } else {
-                    throw new Error('No hay fuente de audio válida.');
-                }
-
-                const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 44100 });
-                log('🧠 Decodificando audio...');
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                const channelData = audioBuffer.getChannelData(0);
-                const totalDuration = Math.round(audioBuffer.duration);
-                log(`📊 Audio decodificado. Duración: ${totalDuration}s`);
-
-                if (totalDuration < 15) {
-                    const msg = '⚠️ El audio es demasiado corto. Se requiere un mínimo de 15 segundos para el análisis estructural.';
-                    log(msg, 'error');
-                    showToast(msg, 'error');
-                    if (termStatus) termStatus.textContent = 'ERROR';
-                    return;
-                }
-
-                const mapping = await runStructuralMapping(channelData, audioBuffer.sampleRate);
-                
-                setAudioState({
-                    signal: channelData,
-                    sampleRate: audioBuffer.sampleRate,
-                    totalDuration: totalDuration,
-                    lufsRanks: mapping.lufsRanks,
-                    currentStart: -1
-                });
-
-                runAnalysisFlow();
-            } catch (err: any) {
-                log(`🛑 Fallo en análisis: ${err.message}`, 'error');
-                if (termStatus) termStatus.textContent = 'ERROR';
-            }
-        }
-
-        // Analyzer Toggle
-        const toggleBtn = document.querySelector('#toggleAnalyzer');
-        const appLayout = document.querySelector('#appLayout');
-        
-        toggleBtn?.addEventListener('click', () => {
-            appLayout?.classList.toggle('show-analyzer');
-            toggleBtn.classList.toggle('active');
-        });
-
-        // Shortcut Terminal
-        window.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'l') {
-                document.querySelector('#terminal')?.classList.toggle('hidden');
-            }
-        });
-    </script>
 </body>
 </html>

@@ -1,5 +1,3 @@
----
----
 <div id="thumbnailContainer">
     <img id="thumbnailImg" src="" alt="" style="opacity: 0; visibility: hidden;" />
     <div class="thumbnail-overlay"></div>
@@ -21,18 +19,22 @@
     </button>
 </form>
 
+<div id="companionStatus" class="companion-badge" style="display:none;"></div>
 <div id="status"></div>
 
 <script>
-    import { log } from '../scripts/logger';
-
     const urlInput = document.querySelector('#url') as HTMLInputElement;
     const thumbContainer = document.querySelector('#thumbnailContainer') as HTMLElement;
     const thumbImg = document.querySelector('#thumbnailImg') as HTMLImageElement;
     const form = document.querySelector('#downloadForm');
     const statusDiv = document.querySelector('#status') as HTMLElement;
+    const companionStatus = document.querySelector('#companionStatus') as HTMLElement;
     const btn = document.querySelector('#downloadBtn') as HTMLButtonElement;
     const btnText = document.querySelector('#btnText');
+
+    let extensionPresent = false;
+    let msgId = 0;
+    const pending = new Map<number, (val: any) => void>();
 
     function getYouTubeID(url: string) {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -43,7 +45,6 @@
     let thumbHider: any = null;
     let lastProcessedID: string | null = null;
 
-    // Escuchamos la carga real de la imagen para evitar el "salto" de la anterior
     thumbImg.onload = () => {
         if (lastProcessedID) {
             thumbImg.style.opacity = '1';
@@ -55,27 +56,19 @@
         if (id === lastProcessedID) return;
         
         if (id) {
-            // Caso: Cambio de Video o Nuevo Video
             if (thumbHider) clearTimeout(thumbHider);
             
-            // Si ya hay una imagen y es distinta, la desvanecemos primero
             if (lastProcessedID) {
                 thumbImg.style.opacity = '0';
-                // Esperamos un poco menos para que se sienta fluido pero sin flash (200ms)
                 await new Promise(r => setTimeout(r, 200));
             }
 
-            // Preparamos la nueva carga (invisible)
             thumbImg.style.opacity = '0';
             thumbImg.src = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
             thumbContainer.style.borderStyle = 'solid';
             
-            if (lastProcessedID !== id) {
-                log(`Video detectado: ${id}`);
-            }
             lastProcessedID = id;
         } else {
-            // Caso: Limpieza (URL vacía o inválida)
             lastProcessedID = null;
             thumbImg.style.opacity = '0';
             thumbContainer.style.borderStyle = 'dashed';
@@ -95,6 +88,52 @@
         updateThumbnail(id);
     });
 
+    // --- Extension Bridge ---
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        if (event.data?.type === 'YTMP3_EXTENSION_READY') {
+            extensionPresent = true;
+            showCompanionBadge('Extension + Companion detected ✅', 'ok');
+        }
+        if (event.data?.type === 'YTMP3_RESPONSE' || event.data?.type === 'YTMP3_CHECK_RESPONSE') {
+            const resolve = pending.get(event.data.id);
+            if (resolve) {
+                resolve(event.data);
+                pending.delete(event.data.id);
+            }
+        }
+    });
+
+    function sendToExtension(type: string, payload: any): Promise<any> {
+        return new Promise((resolve) => {
+            const id = ++msgId;
+            pending.set(id, resolve);
+            window.postMessage({ type, id, ...payload }, '*');
+            setTimeout(() => {
+                if (pending.has(id)) {
+                    pending.delete(id);
+                    resolve({ connected: false, success: false, error: 'Timeout' });
+                }
+            }, 3000);
+        });
+    }
+
+    function showCompanionBadge(text: string, variant: 'ok' | 'error' | 'warn') {
+        companionStatus.style.display = 'block';
+        companionStatus.textContent = text;
+        companionStatus.className = 'companion-badge ' + variant;
+    }
+
+    // Check for extension on load
+    setTimeout(async () => {
+        const res = await sendToExtension('YTMP3_CHECK', {});
+        if (res.connected) {
+            showCompanionBadge('Companion connected ✅', 'ok');
+        } else {
+            showCompanionBadge('Companion not running — server fallback', 'warn');
+        }
+    }, 500);
+
     form?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const url = urlInput.value;
@@ -105,8 +144,23 @@
         statusDiv.innerHTML = '<span class="loader"></span> Procesando...';
         btn.disabled = true;
 
-        log(`➡️ URL enviada: ${url}`);
+        // Try extension first
+        if (extensionPresent) {
+            const res = await sendToExtension('YTMP3_DOWNLOAD', { url, format: 'mp3' });
+            if (res.success) {
+                statusDiv.className = 'status-success';
+                statusDiv.innerHTML = `✅ Descarga iniciada en Companion`;
+                btn.disabled = false;
+                return;
+            } else if (res.error && res.error !== 'Timeout') {
+                statusDiv.className = 'status-error';
+                statusDiv.innerHTML = `❌ Companion error: ${res.error}`;
+                btn.disabled = false;
+                return;
+            }
+        }
 
+        // Fallback to server
         try {
             const response = await fetch('/api/download', {
                 method: 'POST',
@@ -118,18 +172,15 @@
 
             if (response.ok) {
                 statusDiv.className = 'status-success';
-                statusDiv.innerHTML = `✅ Descarga completada`;
-                log('✅ MP3 listo en servidor. Lanzando Laboratorio...');
-                
-                // Disparamos evento global para que index.astro lo maneje
-                window.dispatchEvent(new CustomEvent('audio-ready', { detail: { filename: result.filename } }));
+                statusDiv.innerHTML = `✅ Descarga completada: ${result.filename}`;
             } else {
                 statusDiv.className = 'status-error';
                 statusDiv.innerHTML = `❌ Error: ${result.error}`;
-                log(`❌ Error servidor: ${result.error}`, 'error');
             }
         } catch (err: any) {
-            log(`❌ Error de red: ${err.message}`, 'error');
+            console.error(`Error de red: ${err.message}`);
+            statusDiv.className = 'status-error';
+            statusDiv.innerHTML = `❌ Error de red`;
         } finally {
             btn.disabled = false;
             if (btnText) btnText.textContent = 'Descargar MP3';
