@@ -1,0 +1,3 @@
+C:/0Antigravity/tsmp3download/desktop/build/CMakeFiles/ymp3.dir
+C:/0Antigravity/tsmp3download/desktop/build/CMakeFiles/ALL_BUILD.dir
+C:/0Antigravity/tsmp3download/desktop/build/CMakeFiles/ZERO_CHECK.dir
