@@ -371,7 +371,11 @@ static void StartDownloadProcess(const std::wstring& url, int authIdx, const std
     std::wstring authMethods[] = { 
         L"--cookies-from-browser chrome", 
         L"--cookies-from-browser edge", 
-        L"--extractor-args \"youtube:player_client=ios,web\"" 
+        L"--cookies-from-browser firefox",
+        L"--cookies-from-browser opera",
+        L"--cookies-from-browser vivaldi",
+        L"--extractor-args \"youtube:player_client=ios,web\"",
+        L"--extractor-args \"youtube:player_client=android,web\""
     };
 
     wchar_t tempPath[MAX_PATH];
@@ -442,8 +446,13 @@ static void StartDownloadProcess(const std::wstring& url, int authIdx, const std
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
 
-        if (finalExitCode != 0 && authIdx < 2) {
-            // Reintentar con el siguiente método
+        if (finalExitCode != 0 && authIdx < 6) { // numMethods - 1
+            // Si falló por algo que parece ser un bloqueo, reintentamos
+            // Eliminamos posibles archivos temporales/parciales para empezar limpio con el nuevo método
+            DeleteFileW(tempFile.c_str());
+            std::wstring partFile = tempFile + L".part";
+            DeleteFileW(partFile.c_str());
+            
             StartDownloadProcess(url, authIdx + 1, finalMp3Path);
         } else if (finalExitCode == 0) {
             PostDownloadProgress(100.0, "", "");
@@ -482,7 +491,8 @@ static void RunDownload(const std::wstring& url) {
     std::wstring authMethods[] = { 
         L"--cookies-from-browser chrome", 
         L"--cookies-from-browser edge", 
-        L"--extractor-args \"youtube:player_client=ios,web\"" 
+        L"--cookies-from-browser firefox",
+        L"--extractor-args \"youtube:player_client=ios,web\""
     };
 
     for (const auto& auth : authMethods) {
