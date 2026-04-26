@@ -21,6 +21,10 @@ using Microsoft::WRL::Callback;
 static ComPtr<ICoreWebView2Controller> g_controller;
 static ComPtr<ICoreWebView2> g_webview;
 static HWND g_hwnd = nullptr;
+static std::wstring g_preferredBrowser = L"auto";
+static bool g_useOAuth2 = false;
+
+static void PostScript(const wchar_t* js);
 static const UINT WM_RUN_JS = WM_APP + 1;
 
 // Resource-based embedding
@@ -47,7 +51,92 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 .progress-bar{width:100%;height:8px;background:#1a1a1a;border-radius:4px;overflow:hidden;}
 .progress-fill{height:100%;width:0%;border-radius:4px;transition:width .15s ease}
 #dl-fill{background:linear-gradient(90deg,#4ade80,#22c55e);}
-#conv-fill{background:linear-gradient(90deg,#60a5fa,#3b82f6);}
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            transition: all 0.5s ease;
+        }
+
+        .settings-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            opacity: 0.7;
+        }
+        .settings-btn:hover { transform: rotate(90deg); opacity: 1; }
+
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            width: 300px;
+            height: 100%;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(20px);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            padding: 30px;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 999;
+            border-left: 1px solid rgba(255,255,255,0.1);
+        }
+        .settings-panel.open { right: 0; }
+        .settings-panel h2 { font-size: 1.2rem; margin-bottom: 25px; color: #ff0000; font-weight: 600; }
+        
+        .setting-group { margin-bottom: 25px; }
+        .setting-group label { display: block; font-size: 0.85rem; margin-bottom: 10px; opacity: 0.6; }
+        
+        .btn-setting {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-setting:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+        .btn-setting i { font-size: 1.1rem; }
+
+        .browser-select {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        /* Estilos existentes optimizados */
+        .container {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(15px);
+            padding: 50px;
+            border-radius: 35px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            width: 500px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 1;
+        }
 .conv-indet{position:relative;overflow:hidden;}
 .conv-indet::after{content:'';position:absolute;top:0;left:-40%;width:40%;height:100%;background:rgba(255,255,255,0.35);border-radius:4px;animation:convSlide 1.2s ease-in-out infinite;}
 @keyframes convSlide{0%{left:-40%}100%{left:100%}}
@@ -56,7 +145,41 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
-<h1>YouTube to MP3</h1>
+    <div class="settings-btn" id="settingsBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </div>
+
+    <div class="settings-panel" id="settingsPanel">
+        <h2>Ajustes de Conexión</h2>
+        
+        <div class="setting-group">
+            <label>Autenticación Avanzada</label>
+            <button class="btn-setting" onclick="window.chrome.webview.postMessage({action:'oauth'})">
+                Vincular Cuenta (OAuth2)
+            </button>
+            <button class="btn-setting" onclick="window.chrome.webview.postMessage({action:'login'})">
+                Login Interno (Web)
+            </button>
+        </div>
+
+        <div class="setting-group">
+            <label>Prioridad de Navegador</label>
+            <select class="browser-select" id="browserSelect" onchange="updateBrowser()">
+                <option value="auto">Cascada Automática</option>
+                <option value="chrome">Solo Chrome</option>
+                <option value="edge">Solo Edge</option>
+                <option value="firefox">Solo Firefox</option>
+                <option value="opera">Solo Opera</option>
+            </select>
+        </div>
+
+        <div style="position: absolute; bottom: 30px; opacity: 0.3; font-size: 0.7rem;">
+            TSMP3 v1.0.0 | By Antigravity
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>YouTube a MP3</h1>
 <p class="subtitle">Descarga audio</p>
 <img id="thumb" src="" alt="">
 <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
@@ -73,10 +196,29 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </div>
 
 <div id="status"></div>
+</div>
 <script>
 const $=id=>document.getElementById(id),urlEl=$('url'),btn=$('btn'),st=$('status'),thumb=$('thumb');
 const dlCont=$('dl-container'),dlFill=$('dl-fill'),dlText=$('dl-text');
 const convCont=$('conv-container'),convFill=$('conv-fill'),convText=$('conv-text');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        
+        settingsBtn.onclick = () => settingsPanel.classList.toggle('open');
+        
+        // Cerrar panel si se hace clic fuera
+        document.addEventListener('click', (e) => {
+            if (!settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) {
+                settingsPanel.classList.remove('open');
+            }
+        });
+
+        function updateBrowser() {
+            const val = document.getElementById('browserSelect').value;
+            window.chrome.webview.postMessage({action:'set_browser', value: val});
+        }
+
+        async function download() {
 const getId=u=>{const m=u.match(/(?:youtu\.be\/|v=|v\/|embed\/)([^&?\s]{11})/);return m?m[1]:null};
 urlEl.addEventListener('input',()=>{const id=getId(urlEl.value);if(id){thumb.src='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';thumb.style.opacity='1'}else{thumb.style.opacity='0'}});
 btn.addEventListener('click',()=>{const url=urlEl.value.trim();if(!url)return;btn.disabled=true;st.className='info';st.textContent='Iniciando...';dlCont.style.display='block';dlFill.style.width='0%';dlText.textContent='0%';convCont.style.display='none';convFill.style.width='0%';convText.textContent='...';if(window.chrome&&window.chrome.webview){window.chrome.webview.postMessage(JSON.stringify({action:'download',url:url}))}});
@@ -492,8 +634,16 @@ static void RunDownload(const std::wstring& url) {
         L"--cookies-from-browser chrome", 
         L"--cookies-from-browser edge", 
         L"--cookies-from-browser firefox",
-        L"--extractor-args \"youtube:player_client=ios,web\""
+        L"--cookies-from-browser opera",
+        L"--cookies-from-browser vivaldi",
+        L"--extractor-args \"youtube:player_client=ios,web\"",
+        L"--extractor-args \"youtube:player_client=android,web\""
     };
+    
+    // Si el usuario eligió un navegador específico, lo ponemos primero
+    if (g_preferredBrowser != L"auto") {
+        authMethods[0] = L"--cookies-from-browser " + g_preferredBrowser;
+    }
 
     for (const auto& auth : authMethods) {
         mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--fixup never " + auth + L" --print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
@@ -583,11 +733,34 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                         if (!msg) return S_OK;
                                         std::wstring w(msg);
                                         CoTaskMemFree(msg);
-                                        size_t i = w.find(L"\"url\":\"");
-                                        if (i != std::wstring::npos) {
-                                            i += 7;
-                                            size_t j = w.find(L"\"", i);
-                                            if (j != std::wstring::npos) RunDownload(w.substr(i, j - i));
+
+                                        if (w.find(L"\"action\":\"download\"") != std::wstring::npos) {
+                                            size_t i = w.find(L"\"url\":\"");
+                                            if (i != std::wstring::npos) {
+                                                i += 7;
+                                                size_t j = w.find(L"\"", i);
+                                                if (j != std::wstring::npos) RunDownload(w.substr(i, j - i));
+                                            }
+                                        }
+                                        else if (w.find(L"\"action\":\"set_browser\"") != std::wstring::npos) {
+                                            size_t i = w.find(L"\"value\":\"");
+                                            if (i != std::wstring::npos) {
+                                                i += 9;
+                                                size_t j = w.find(L"\"", i);
+                                                if (j != std::wstring::npos) g_preferredBrowser = w.substr(i, j - i);
+                                            }
+                                        }
+                                        else if (w.find(L"\"action\":\"oauth\"") != std::wstring::npos) {
+                                            std::thread([]() {
+                                                std::wstring ytdlpPath;
+                                                if (FindYtDlp(ytdlpPath)) {
+                                                    PostScript(L"window.onErr('Iniciando OAuth2... Mira la consola')");
+                                                    RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
+                                                }
+                                            }).detach();
+                                        }
+                                        else if (w.find(L"\"action\":\"login\"") != std::wstring::npos) {
+                                            PostScript(L"window.onErr('Login Web disponible v1.0.1')");
                                         }
                                         return S_OK;
                                     }).Get(), &tok);
