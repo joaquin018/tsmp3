@@ -800,29 +800,19 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                             std::thread([]() {
                                                 std::wstring ytdlpPath;
                                                 if (FindYtDlp(ytdlpPath)) {
-                                                    PostScript(L"window.onInfo('Generando c\u00f3digo de vinculaci\u00f3n...')");
-                                                    // Ejecutamos y capturamos la salida
-                                                    std::wstring output = RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
+                                                    PostScript(L"window.onInfo('Abriendo ventana de vinculaci\u00f3n...')");
+                                                    // Ejecutar en una consola nueva y visible para que sea interactivo
+                                                    std::wstring cmd = L"cmd.exe /c \"\"" + ytdlpPath + L"\" --username oauth2 --password \"\" & pause\"";
                                                     
-                                                    // Buscamos un patrón tipo código (4 caracteres - 4 caracteres)
-                                                    size_t dashPos = output.find(L"-");
-                                                    bool found = false;
-                                                    if (dashPos != std::wstring::npos && dashPos >= 4 && output.length() >= dashPos + 5) {
-                                                        std::wstring code = output.substr(dashPos - 4, 9);
-                                                        // Validar que sea un código (sin espacios)
-                                                        if (code.find(L" ") == std::wstring::npos) {
-                                                            std::wstring msg = L"Entra en google.com/device y usa el c\u00f3digo: " + code;
-                                                            PostScript((L"window.onInfo('" + msg + L"')").c_str());
-                                                            found = true;
-                                                        }
-                                                    }
-                                                    
-                                                    if (!found) {
-                                                        // Si no encontramos el patrón, mostramos un resumen del error
-                                                        std::wstring shortOut = output.length() > 60 ? output.substr(output.length() - 60) : output;
-                                                        // Limpiar comillas para JS
-                                                        for(auto& c : shortOut) if(c=='\'') c=' ';
-                                                        PostScript((L"window.onErr('Error: " + shortOut + L"')").c_str());
+                                                    STARTUPINFOW si = { sizeof(si) };
+                                                    PROCESS_INFORMATION pi = {};
+                                                    if (CreateProcessW(nullptr, const_cast<LPWSTR>(cmd.c_str()), nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr, nullptr, &si, &pi)) {
+                                                        WaitForSingleObject(pi.hProcess, INFINITE);
+                                                        CloseHandle(pi.hProcess);
+                                                        CloseHandle(pi.hThread);
+                                                        PostScript(L"window.onOk('Vinculaci\u00f3n finalizada')");
+                                                    } else {
+                                                        PostScript(L"window.onErr('No se pudo abrir la ventana de consola')");
                                                     }
                                                 }
                                             }).detach();
