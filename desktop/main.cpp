@@ -269,6 +269,10 @@ window.onErr=m=>{
     dlCont.style.display='none';
     convCont.style.display='none'
 };
+window.onInfo=m=>{
+    st.className='info';
+    st.textContent='ℹ️ '+m;
+};
 window.onStatus=m=>{st.className='info';st.textContent=m};
 </script>
 </body>
@@ -795,14 +799,14 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                         else if (w.find(L"\"action\":\"oauth\"") != std::wstring::npos) {
                                             std::thread([]() {
                                                 std::wstring ytdlpPath;
-                                                if (FindYtDlp(ytdlpPath)) {
-                                                    PostScript(L"window.onErr('Iniciando OAuth2... Mira la consola')");
+                                                    if (FindYtDlp(ytdlpPath)) {
+                                                        PostScript(L"window.onInfo('Iniciando OAuth2... Mira la consola')");
                                                     RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
                                                 }
                                             }).detach();
                                         }
                                         else if (w.find(L"\"action\":\"login\"") != std::wstring::npos) {
-                                            PostScript(L"window.onErr('Login Web disponible v1.0.1')");
+                                            PostScript(L"window.onInfo('Login Web disponible v1.0.1')");
                                         }
                                         return S_OK;
                                     }).Get(), &tok);
