@@ -53,7 +53,7 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </head>
 <body>
 <h1>YouTube to MP3</h1>
-<p class="subtitle">Descarga audio en alta fidelidad</p>
+<p class="subtitle">Descarga audio</p>
 <img id="thumb" src="" alt="">
 <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
 <button id="btn">Descargar MP3</button>
