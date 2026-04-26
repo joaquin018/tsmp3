@@ -54,11 +54,11 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
-<h1>YouTube to MP3</h1>
-<p class="subtitle">Descarga audio</p>
+<h1>YouTube to M4A</h1>
+<p class="subtitle">Descarga audio en alta calidad</p>
 <img id="thumb" src="" alt="">
 <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
-<button id="btn">Descargar MP3</button>
+<button id="btn">Descargar M4A</button>
 
 <div id="dl-container" class="progress-container">
     <div class="progress-label"><span>Descargando...</span><span id="dl-text">0%</span></div>
@@ -66,7 +66,7 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </div>
 
 <div id="conv-container" class="progress-container" style="margin-top:12px;">
-    <div class="progress-label"><span>Convirtiendo a MP3...</span><span id="conv-text">procesando</span></div>
+    <div class="progress-label"><span>Procesando audio...</span><span id="conv-text">procesando</span></div>
     <div class="progress-bar"><div id="conv-fill" class="progress-fill"></div></div>
 </div>
 
@@ -422,7 +422,7 @@ static void RunDownload(const std::wstring& url) {
     );
 
     // Launch yt-dlp directly. stdout and stderr go to the same temp log file.
-    std::wstring args = L"\"" + ytdlpPath + L"\" -x --audio-format mp3 --audio-quality 0 --no-playlist --newline --progress -o \""
+    std::wstring args = L"\"" + ytdlpPath + L"\" -f bestaudio --no-playlist --newline --progress -o \""
         + outTemplate + L"\" \"" + url + L"\"";
 
     STARTUPINFOW si = { sizeof(si) };
@@ -497,7 +497,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
 
-    CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr,
+    wchar_t localAppData[MAX_PATH];
+    SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, localAppData);
+    std::wstring webviewDataDir = std::wstring(localAppData) + L"\\TSMP3\\WebView2";
+    CreateCoreWebView2EnvironmentWithOptions(nullptr, webviewDataDir.c_str(), nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [hwnd](HRESULT, ICoreWebView2Environment* env) -> HRESULT {
                 env->CreateCoreWebView2Controller(hwnd,
