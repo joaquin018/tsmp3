@@ -154,10 +154,10 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
         
         <div class="setting-group">
             <label>Autenticación Avanzada</label>
-            <button class="btn-setting" onclick="window.chrome.webview.postMessage({action:'oauth'})">
+            <button class="btn-setting" onclick="window.chrome.webview.postMessage(JSON.stringify({action:'oauth'}))">
                 Vincular Cuenta (OAuth2)
             </button>
-            <button class="btn-setting" onclick="window.chrome.webview.postMessage({action:'login'})">
+            <button class="btn-setting" onclick="window.chrome.webview.postMessage(JSON.stringify({action:'login'}))">
                 Login Interno (Web)
             </button>
         </div>
@@ -201,32 +201,74 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 const $=id=>document.getElementById(id),urlEl=$('url'),btn=$('btn'),st=$('status'),thumb=$('thumb');
 const dlCont=$('dl-container'),dlFill=$('dl-fill'),dlText=$('dl-text');
 const convCont=$('conv-container'),convFill=$('conv-fill'),convText=$('conv-text');
-        const settingsBtn = document.getElementById('settingsBtn');
-        const settingsPanel = document.getElementById('settingsPanel');
-        
-        settingsBtn.onclick = () => settingsPanel.classList.toggle('open');
-        
-        // Cerrar panel si se hace clic fuera
-        document.addEventListener('click', (e) => {
-            if (!settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) {
-                settingsPanel.classList.remove('open');
-            }
-        });
+const settingsBtn = $('settingsBtn'), settingsPanel = $('settingsPanel');
 
-        function updateBrowser() {
-            const val = document.getElementById('browserSelect').value;
-            window.chrome.webview.postMessage({action:'set_browser', value: val});
-        }
+settingsBtn.onclick = (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); };
+document.addEventListener('click', (e) => {
+    if (!settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) {
+        settingsPanel.classList.remove('open');
+    }
+});
 
-        async function download() {
+function updateBrowser() {
+    const val = $('browserSelect').value;
+    window.chrome.webview.postMessage(JSON.stringify({action:'set_browser', value: val}));
+}
+
 const getId=u=>{const m=u.match(/(?:youtu\.be\/|v=|v\/|embed\/)([^&?\s]{11})/);return m?m[1]:null};
-urlEl.addEventListener('input',()=>{const id=getId(urlEl.value);if(id){thumb.src='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';thumb.style.opacity='1'}else{thumb.style.opacity='0'}});
-btn.addEventListener('click',()=>{const url=urlEl.value.trim();if(!url)return;btn.disabled=true;st.className='info';st.textContent='Iniciando...';dlCont.style.display='block';dlFill.style.width='0%';dlText.textContent='0%';convCont.style.display='none';convFill.style.width='0%';convText.textContent='...';if(window.chrome&&window.chrome.webview){window.chrome.webview.postMessage(JSON.stringify({action:'download',url:url}))}});
-window.onDownloadProgress=(pct,dlSize,totalSize)=>{dlFill.style.width=pct+'%';dlText.textContent=dlSize?dlSize+' / '+totalSize:pct+'%'};
-window.onConverting=()=>{dlFill.style.width='100%';dlText.textContent='100%';convCont.style.display='block';convFill.style.width='30%';convFill.classList.add('conv-indet');convText.textContent='procesando...'};
-window.onConvertingDone=()=>{convFill.classList.remove('conv-indet');convFill.style.width='100%';convText.textContent='listo'};
-window.onOk=m=>{btn.disabled=false;st.className='ok';st.textContent='✅ '+m;setTimeout(()=>{dlCont.style.display='none';convCont.style.display='none'},3000)};
-window.onErr=m=>{btn.disabled=false;st.className='err';st.textContent='❌ '+m;dlCont.style.display='none';convCont.style.display='none'};
+urlEl.addEventListener('input',()=>{
+    const id=getId(urlEl.value);
+    if(id){thumb.src='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';thumb.style.opacity='1'}
+    else{thumb.style.opacity='0'}
+});
+
+btn.addEventListener('click',()=>{
+    const url=urlEl.value.trim();
+    if(!url)return;
+    btn.disabled=true;
+    st.className='info';
+    st.textContent='Iniciando...';
+    dlCont.style.display='block';
+    dlFill.style.width='0%';
+    dlText.textContent='0%';
+    convCont.style.display='none';
+    convFill.style.width='0%';
+    convText.textContent='...';
+    if(window.chrome&&window.chrome.webview){
+        window.chrome.webview.postMessage(JSON.stringify({action:'download',url:url}))
+    }
+});
+
+window.onDownloadProgress=(pct,dlSize,totalSize)=>{
+    dlFill.style.width=pct+'%';
+    dlText.textContent=dlSize?dlSize+' / '+totalSize:pct+'%'
+};
+window.onConverting=()=>{
+    dlFill.style.width='100%';
+    dlText.textContent='100%';
+    convCont.style.display='block';
+    convFill.style.width='30%';
+    convFill.classList.add('conv-indet');
+    convText.textContent='procesando...'
+};
+window.onConvertingDone=()=>{
+    convFill.classList.remove('conv-indet');
+    convFill.style.width='100%';
+    convText.textContent='listo'
+};
+window.onOk=m=>{
+    btn.disabled=false;
+    st.className='ok';
+    st.textContent='✅ '+m;
+    setTimeout(()=>{dlCont.style.display='none';convCont.style.display='none'},3000)
+};
+window.onErr=m=>{
+    btn.disabled=false;
+    st.className='err';
+    st.textContent='❌ '+m;
+    dlCont.style.display='none';
+    convCont.style.display='none'
+};
 window.onStatus=m=>{st.className='info';st.textContent=m};
 </script>
 </body>
