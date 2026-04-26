@@ -804,14 +804,25 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                                     // Ejecutamos y capturamos la salida
                                                     std::wstring output = RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
                                                     
-                                                    // Buscamos el código en la salida (ej: "enter the code ABCD-1234")
-                                                    size_t codePos = output.find(L"enter the code ");
-                                                    if (codePos != std::wstring::npos) {
-                                                        std::wstring code = output.substr(codePos + 15, 9);
-                                                        std::wstring msg = L"Vaya a google.com/device y use el c\u00f3digo: " + code;
-                                                        PostScript((L"window.onInfo('" + msg + L"')").c_str());
-                                                    } else {
-                                                        PostScript(L"window.onErr('No se pudo generar el c\u00f3digo. Intenta de nuevo.')");
+                                                    // Buscamos un patrón tipo código (4 caracteres - 4 caracteres)
+                                                    size_t dashPos = output.find(L"-");
+                                                    bool found = false;
+                                                    if (dashPos != std::wstring::npos && dashPos >= 4 && output.length() >= dashPos + 5) {
+                                                        std::wstring code = output.substr(dashPos - 4, 9);
+                                                        // Validar que sea un código (sin espacios)
+                                                        if (code.find(L" ") == std::wstring::npos) {
+                                                            std::wstring msg = L"Entra en google.com/device y usa el c\u00f3digo: " + code;
+                                                            PostScript((L"window.onInfo('" + msg + L"')").c_str());
+                                                            found = true;
+                                                        }
+                                                    }
+                                                    
+                                                    if (!found) {
+                                                        // Si no encontramos el patrón, mostramos un resumen del error
+                                                        std::wstring shortOut = output.length() > 60 ? output.substr(output.length() - 60) : output;
+                                                        // Limpiar comillas para JS
+                                                        for(auto& c : shortOut) if(c=='\'') c=' ';
+                                                        PostScript((L"window.onErr('Error: " + shortOut + L"')").c_str());
                                                     }
                                                 }
                                             }).detach();
