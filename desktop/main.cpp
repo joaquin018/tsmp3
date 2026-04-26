@@ -21,10 +21,13 @@ using Microsoft::WRL::Callback;
 static ComPtr<ICoreWebView2Controller> g_controller;
 static ComPtr<ICoreWebView2> g_webview;
 static HWND g_hwnd = nullptr;
+static HWND g_loginHwnd = nullptr;
+static ComPtr<ICoreWebView2Controller> g_loginController;
 static std::wstring g_preferredBrowser = L"auto";
 static bool g_useOAuth2 = false;
 
 static void PostScript(const wchar_t* js);
+static LRESULT CALLBACK LoginWndProc(HWND, UINT, WPARAM, LPARAM);
 static const UINT WM_RUN_JS = WM_APP + 1;
 
 // Resource-based embedding
@@ -154,9 +157,6 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
         
         <div class="setting-group">
             <label>Autenticación Avanzada</label>
-            <button class="btn-setting" onclick="window.chrome.webview.postMessage(JSON.stringify({action:'oauth'}))">
-                Vincular Cuenta (OAuth2)
-            </button>
             <button class="btn-setting" onclick="window.chrome.webview.postMessage(JSON.stringify({action:'login'}))">
                 Login Interno (Web)
             </button>
@@ -796,30 +796,53 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                                 if (j != std::wstring::npos) g_preferredBrowser = w.substr(i, j - i);
                                             }
                                         }
-                                        else if (w.find(L"\"action\":\"oauth\"") != std::wstring::npos) {
-                                            std::thread([]() {
-                                                std::wstring ytdlpPath;
-                                                if (FindYtDlp(ytdlpPath)) {
-                                                    PostScript(L"window.onInfo('Abriendo ventana de vinculaci\u00f3n...')");
-                                                    // Añadimos una URL de ejemplo para que yt-dlp active el extractor de YouTube
-                                                    std::wstring cmd = L"cmd.exe /c \"\"" + ytdlpPath + L"\" --username oauth2 --password \"\" https://www.youtube.com/watch?v=dQw4w9WgXcQ --ignore-errors & pause\"";
+                                            else if (w.find(L"\"action\":\"login\"") != std::wstring::npos) {
+                                                // Abrir ventana de Login Interno
+                                                std::thread([]() {
+                                                    HINSTANCE hInst = GetModuleHandle(nullptr);
+                                                    WNDCLASSEXW wcex = { sizeof(wcex) };
+                                                    wcex.lpfnWndProc = LoginWndProc;
+                                                    wcex.hInstance = hInst;
+                                                    wcex.lpszClassName = L"TSMP3Login";
+                                                    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+                                                    RegisterClassExW(&wcex);
+
+                                                    g_loginHwnd = CreateWindowExW(0, L"TSMP3Login", L"Login en YouTube",
+                                                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+                                                        nullptr, nullptr, hInst, nullptr);
                                                     
-                                                    STARTUPINFOW si = { sizeof(si) };
-                                                    PROCESS_INFORMATION pi = {};
-                                                    if (CreateProcessW(nullptr, const_cast<LPWSTR>(cmd.c_str()), nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr, nullptr, &si, &pi)) {
-                                                        WaitForSingleObject(pi.hProcess, INFINITE);
-                                                        CloseHandle(pi.hProcess);
-                                                        CloseHandle(pi.hThread);
-                                                        PostScript(L"window.onOk('Vinculaci\u00f3n finalizada')");
-                                                    } else {
-                                                        PostScript(L"window.onErr('No se pudo abrir la ventana de consola')");
+                                                    ShowWindow(g_loginHwnd, SW_SHOW);
+                                                    UpdateWindow(g_loginHwnd);
+
+                                                    wchar_t localAppData[MAX_PATH];
+                                                    SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, localAppData);
+                                                    std::wstring loginDataDir = std::wstring(localAppData) + L"\\TSMP3\\LoginSession";
+                                                    
+                                                    CreateCoreWebView2EnvironmentWithOptions(nullptr, loginDataDir.c_str(), nullptr,
+                                                        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+                                                            [](HRESULT, ICoreWebView2Environment* env) -> HRESULT {
+                                                                env->CreateCoreWebView2Controller(g_loginHwnd,
+                                                                    Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                                                                        [](HRESULT, ICoreWebView2Controller* controller) -> HRESULT {
+                                                                            if (!controller) return E_FAIL;
+                                                                            g_loginController = controller;
+                                                                            ComPtr<ICoreWebView2> webview;
+                                                                            g_loginController->get_CoreWebView2(&webview);
+                                                                            RECT r; GetClientRect(g_loginHwnd, &r);
+                                                                            g_loginController->put_Bounds(r);
+                                                                            webview->Navigate(L"https://accounts.google.com/ServiceLogin?service=youtube");
+                                                                            return S_OK;
+                                                                        }).Get());
+                                                                return S_OK;
+                                                            }).Get());
+                                                    
+                                                    MSG msg;
+                                                    while (GetMessageW(&msg, nullptr, 0, 0)) {
+                                                        TranslateMessage(&msg);
+                                                        DispatchMessageW(&msg);
                                                     }
-                                                }
-                                            }).detach();
-                                        }
-                                        else if (w.find(L"\"action\":\"login\"") != std::wstring::npos) {
-                                            PostScript(L"window.onInfo('Login Web disponible v1.0.1')");
-                                        }
+                                                }).detach();
+                                            }
                                         return S_OK;
                                     }).Get(), &tok);
                             std::wstring html = Utf8ToWstr(HTML);
@@ -833,6 +856,27 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
+    }
+    return 0;
+}
+
+static LRESULT CALLBACK LoginWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_SIZE:
+        if (g_loginController) {
+            RECT r; GetClientRect(hwnd, &r);
+            g_loginController->put_Bounds(r);
+        }
+        break;
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        break;
+    case WM_DESTROY:
+        g_loginController = nullptr;
+        g_loginHwnd = nullptr;
+        PostQuitMessage(0);
+        break;
+    default: return DefWindowProcW(hwnd, msg, wp, lp);
     }
     return 0;
 }
