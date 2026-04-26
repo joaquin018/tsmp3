@@ -24,6 +24,7 @@ static HWND g_hwnd = nullptr;
 static HWND g_loginHwnd = nullptr;
 static ComPtr<ICoreWebView2Controller> g_loginController;
 static std::wstring g_preferredBrowser = L"auto";
+static std::wstring g_proxy = L"";
 static bool g_useOAuth2 = false;
 
 static void PostScript(const wchar_t* js);
@@ -164,13 +165,19 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 
         <div class="setting-group">
             <label>Prioridad de Navegador</label>
-            <select class="browser-select" id="browserSelect" onchange="updateBrowser()">
+            <select class="browser-select" id="browserSelect" onchange="updateSettings()">
                 <option value="auto">Cascada Automática</option>
                 <option value="chrome">Solo Chrome</option>
                 <option value="edge">Solo Edge</option>
                 <option value="firefox">Solo Firefox</option>
                 <option value="opera">Solo Opera</option>
+                <option value="vivaldi">Solo Vivaldi</option>
             </select>
+        </div>
+
+        <div class="setting-group">
+            <label>Proxy (Opcional)</label>
+            <input type="text" class="browser-select" id="proxyInput" placeholder="http://usuario:pass@ip:puerto" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:white;padding:8px;width:100%;box-sizing:border-box;" onchange="updateSettings()">
         </div>
 
         <div style="position: absolute; bottom: 30px; opacity: 0.3; font-size: 0.7rem;">
@@ -210,9 +217,14 @@ document.addEventListener('click', (e) => {
     }
 });
 
-function updateBrowser() {
-    const val = $('browserSelect').value;
-    window.chrome.webview.postMessage(JSON.stringify({action:'set_browser', value: val}));
+function updateSettings() {
+    const browser = $('browserSelect').value;
+    const proxy = $('proxyInput').value;
+    window.chrome.webview.postMessage(JSON.stringify({
+        action:'update_settings', 
+        browser: browser,
+        proxy: proxy
+    }));
 }
 
 const getId=u=>{const m=u.match(/(?:youtu\.be\/|v=|v\/|embed\/)([^&?\s]{11})/);return m?m[1]:null};
@@ -691,8 +703,13 @@ static void RunDownload(const std::wstring& url) {
         authMethods[0] = L"--cookies-from-browser " + g_preferredBrowser;
     }
 
+    std::wstring extraArgs = L"";
+    if (!g_proxy.empty()) {
+        extraArgs += L" --proxy \"" + g_proxy + L"\"";
+    }
+
     for (const auto& auth : authMethods) {
-        mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--fixup never " + auth + L" --print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
+        mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--fixup never " + auth + extraArgs + L" --print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
         if (!mp3Filename.empty()) break;
     }
 
@@ -788,12 +805,18 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                                 if (j != std::wstring::npos) RunDownload(w.substr(i, j - i));
                                             }
                                         }
-                                        else if (w.find(L"\"action\":\"set_browser\"") != std::wstring::npos) {
-                                            size_t i = w.find(L"\"value\":\"");
+                                        else if (w.find(L"\"action\":\"update_settings\"") != std::wstring::npos) {
+                                            size_t i = w.find(L"\"browser\":\"");
                                             if (i != std::wstring::npos) {
-                                                i += 9;
+                                                i += 11;
                                                 size_t j = w.find(L"\"", i);
                                                 if (j != std::wstring::npos) g_preferredBrowser = w.substr(i, j - i);
+                                            }
+                                            size_t pi = w.find(L"\"proxy\":\"");
+                                            if (pi != std::wstring::npos) {
+                                                pi += 9;
+                                                size_t pj = w.find(L"\"", pi);
+                                                if (pj != std::wstring::npos) g_proxy = w.substr(pi, pj - pi);
                                             }
                                         }
                                             else if (w.find(L"\"action\":\"login\"") != std::wstring::npos) {
