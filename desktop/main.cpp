@@ -104,7 +104,7 @@ static void PostScript(const wchar_t* js) {
 static bool ExtractEmbeddedYtDlp(std::wstring& outPath) {
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
-    std::wstring dir = std::wstring(tempPath) + L"ymp3";
+    std::wstring dir = std::wstring(tempPath) + L"tsmp3";
     std::wstring ytdlpPath = dir + L"\\yt-dlp.exe";
 
     DWORD attr = GetFileAttributesW(ytdlpPath.c_str());
@@ -387,7 +387,7 @@ static void RunDownload(const std::wstring& url) {
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
     wchar_t logFile[MAX_PATH];
-    GetTempFileNameW(tempPath, L"ymp3", 0, logFile);
+    GetTempFileNameW(tempPath, L"tsmp3", 0, logFile);
     std::string logPathA;
     {
         int len = WideCharToMultiByte(CP_ACP, 0, logFile, -1, nullptr, 0, nullptr, nullptr);
