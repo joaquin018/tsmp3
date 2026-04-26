@@ -799,9 +799,20 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                         else if (w.find(L"\"action\":\"oauth\"") != std::wstring::npos) {
                                             std::thread([]() {
                                                 std::wstring ytdlpPath;
-                                                    if (FindYtDlp(ytdlpPath)) {
-                                                        PostScript(L"window.onInfo('Iniciando OAuth2... Mira la consola')");
-                                                    RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
+                                                if (FindYtDlp(ytdlpPath)) {
+                                                    PostScript(L"window.onInfo('Generando c\u00f3digo de vinculaci\u00f3n...')");
+                                                    // Ejecutamos y capturamos la salida
+                                                    std::wstring output = RunYtDlpAndCapture(ytdlpPath, L"--username oauth2 --password ''");
+                                                    
+                                                    // Buscamos el código en la salida (ej: "enter the code ABCD-1234")
+                                                    size_t codePos = output.find(L"enter the code ");
+                                                    if (codePos != std::wstring::npos) {
+                                                        std::wstring code = output.substr(codePos + 15, 9);
+                                                        std::wstring msg = L"Vaya a google.com/device y use el c\u00f3digo: " + code;
+                                                        PostScript((L"window.onInfo('" + msg + L"')").c_str());
+                                                    } else {
+                                                        PostScript(L"window.onErr('No se pudo generar el c\u00f3digo. Intenta de nuevo.')");
+                                                    }
                                                 }
                                             }).detach();
                                         }
