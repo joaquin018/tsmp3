@@ -10,7 +10,7 @@ if(MSVC)
     add_link_options(/LTCG /OPT:REF /OPT:ICF)
 endif()
 
-add_executable(tsmp3 WIN32 main.cpp resources.rc)
+add_executable(tsmp3 WIN32 main.cpp AudioConverter.cpp resources.rc)
 
 target_include_directories(tsmp3 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/webview2/build/native/include
@@ -22,6 +22,9 @@ target_link_directories(tsmp3 PRIVATE
 
 target_link_libraries(tsmp3 PRIVATE
     WebView2LoaderStatic.lib
+    mfplat.lib
+    mfreadwrite.lib
+    mfuuid.lib
     shell32
     ole32
     oleaut32

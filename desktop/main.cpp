@@ -14,6 +14,8 @@
 using Microsoft::WRL::ComPtr;
 using Microsoft::WRL::Callback;
 
+#include "AudioConverter.h"
+
 static ComPtr<ICoreWebView2Controller> g_controller;
 static ComPtr<ICoreWebView2> g_webview;
 static HWND g_hwnd = nullptr;
@@ -119,7 +121,7 @@ static bool ExtractResource(const wchar_t* resName, const std::wstring& targetPa
     return true;
 }
 
-static bool ExtractBinaries(std::wstring& ytdlpPath, std::wstring* ffmpegPath = nullptr) {
+static bool ExtractBinaries(std::wstring& ytdlpPath) {
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
     std::wstring dir = std::wstring(tempPath) + L"tsmp3";
@@ -127,13 +129,7 @@ static bool ExtractBinaries(std::wstring& ytdlpPath, std::wstring* ffmpegPath = 
 
     ytdlpPath = dir + L"\\yt-dlp.exe";
     bool ok = ExtractResource(L"YTDLP_EXE", ytdlpPath);
-    if (ffmpegPath) {
-        *ffmpegPath = dir + L"\\ffmpeg.exe";
-        ok &= ExtractResource(L"FFMPEG_EXE", *ffmpegPath);
-    } else {
-        std::wstring ffmpegPathLocal = dir + L"\\ffmpeg.exe";
-        ok &= ExtractResource(L"FFMPEG_EXE", ffmpegPathLocal);
-    }
+    
     // Optional: ffprobe for future builds that include it
     std::wstring ffprobePath = dir + L"\\ffprobe.exe";
     ExtractResource(L"FFPROBE_EXE", ffprobePath);
@@ -141,8 +137,8 @@ static bool ExtractBinaries(std::wstring& ytdlpPath, std::wstring* ffmpegPath = 
     return ok;
 }
 
-static bool FindYtDlp(std::wstring& outPath, std::wstring* outFfmpeg = nullptr) {
-    if (ExtractBinaries(outPath, outFfmpeg)) return true;
+static bool FindYtDlp(std::wstring& outPath) {
+    if (ExtractBinaries(outPath)) return true;
 
     wchar_t selfPath[MAX_PATH];
     GetModuleFileNameW(nullptr, selfPath, MAX_PATH);
@@ -154,20 +150,10 @@ static bool FindYtDlp(std::wstring& outPath, std::wstring* outFfmpeg = nullptr) 
     DWORD attr = GetFileAttributesW(localYtDlp.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
         outPath = localYtDlp;
-        if (outFfmpeg) {
-            std::wstring localFfmpeg = selfDir + L"\\ffmpeg.exe";
-            DWORD attr2 = GetFileAttributesW(localFfmpeg.c_str());
-            if (attr2 != INVALID_FILE_ATTRIBUTES && !(attr2 & FILE_ATTRIBUTE_DIRECTORY)) {
-                *outFfmpeg = localFfmpeg;
-            } else {
-                *outFfmpeg = L"ffmpeg.exe";
-            }
-        }
         return true;
     }
 
     outPath = L"yt-dlp.exe";
-    if (outFfmpeg) *outFfmpeg = L"ffmpeg.exe";
     return true;
 }
 
@@ -359,7 +345,6 @@ struct JobCtx {
     std::string logPath;
     std::wstring tempFile;
     std::wstring finalMp3Path;
-    std::wstring ffmpegPath;
 };
 
 static DWORD WINAPI MonitorThread(LPVOID param) {
@@ -368,7 +353,6 @@ static DWORD WINAPI MonitorThread(LPVOID param) {
     std::string logPath = ctx->logPath;
     std::wstring tempFile = ctx->tempFile;
     std::wstring finalMp3Path = ctx->finalMp3Path;
-    std::wstring ffmpegPath = ctx->ffmpegPath;
     delete ctx;
 
     double lastPct = -1.0;
@@ -462,52 +446,21 @@ static DWORD WINAPI MonitorThread(LPVOID param) {
     PostDownloadProgress(100.0, lastDlSize, lastTotalSize);
     PostScript(L"window.onConverting()");
 
-    // Run ffmpeg to convert to MP3
-    SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
-    HANDLE hNulIn = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-
-    std::wstring args = L"\"" + ffmpegPath + L"\" -i \"" + tempFile + L"\" -vn -ar 44100 -ac 2 -b:a 192k \"" + finalMp3Path + L"\" -y";
-    STARTUPINFOW si = { sizeof(si) };
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.hStdInput = (hNulIn != INVALID_HANDLE_VALUE) ? hNulIn : nullptr;
-    si.hStdOutput = nullptr;
-    si.hStdError = nullptr;
-    si.wShowWindow = SW_HIDE;
-
-    PROCESS_INFORMATION pi = {};
-    BOOL created = CreateProcessW(nullptr, const_cast<LPWSTR>(args.c_str()), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (hNulIn != INVALID_HANDLE_VALUE) CloseHandle(hNulIn);
-
-    if (!created) {
-        DeleteFileW(tempFile.c_str());
-        PostScript(L"window.onErr('No se pudo iniciar ffmpeg')");
-        return 0;
-    }
-
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD fExitCode = 0;
-    GetExitCodeProcess(pi.hProcess, &fExitCode);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-
-    DeleteFileW(tempFile.c_str());
-
-    if (fExitCode == 0) {
+    // Conversion nativa usando Media Foundation (sin ffmpeg externo)
+    if (AudioConverter::ConvertToMp3(tempFile, finalMp3Path)) {
         PostScript(L"window.onConvertingDone()");
         PostScript(L"window.onOk('Descarga completada en Downloads')");
     } else {
-        wchar_t errBuf[256];
-        swprintf(errBuf, 256, L"window.onErr('Error en la conversi\u00f3n (c\u00f3digo %lu)')", fExitCode);
-        PostScript(errBuf);
+        PostScript(L"window.onErr('Error en la conversi\u00f3n nativa')");
     }
 
+    DeleteFileW(tempFile.c_str());
     return 0;
 }
 
 static void RunDownload(const std::wstring& url) {
     std::wstring ytdlpPath;
-    std::wstring ffmpegPath;
-    if (!FindYtDlp(ytdlpPath, &ffmpegPath)) {
+    if (!FindYtDlp(ytdlpPath)) {
         PostScript(L"window.onErr('No se encontr\u00f3 yt-dlp embebido ni en PATH')");
         return;
     }
@@ -571,7 +524,7 @@ static void RunDownload(const std::wstring& url) {
         nullptr
     );
 
-    std::wstring args = L"\"" + ytdlpPath + L"\" -f bestaudio --no-playlist --newline --progress -o \""
+    std::wstring args = L"\"" + ytdlpPath + L"\" -f \"ba[ext=m4a]/ba\" --no-playlist --newline --progress -o \""
         + tempFile + L"\" \"" + url + L"\"";
 
     STARTUPINFOW si = { sizeof(si) };
@@ -603,7 +556,7 @@ static void RunDownload(const std::wstring& url) {
 
     CloseHandle(pi.hThread);
 
-    JobCtx* ctx = new JobCtx{ pi.hProcess, logPathA, tempFile, finalMp3Path, ffmpegPath };
+    JobCtx* ctx = new JobCtx{ pi.hProcess, logPathA, tempFile, finalMp3Path };
     HANDLE hThread = CreateThread(nullptr, 0, MonitorThread, ctx, 0, nullptr);
     if (hThread) CloseHandle(hThread);
 }
