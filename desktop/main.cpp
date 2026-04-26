@@ -193,7 +193,7 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 <button id="btn">Descargar MP3</button>
 
 <div id="dl-container" class="progress-container">
-    <div class="progress-label"><span>Descargando...</span><span id="dl-text">0%</span></div>
+  <div class="progress-label"><span>Descargando...</span><span id="dl-text">0%</span></div>
     <div class="progress-bar"><div id="dl-fill" class="progress-fill"></div></div>
 </div>
 
