@@ -801,8 +801,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
                                                 std::wstring ytdlpPath;
                                                 if (FindYtDlp(ytdlpPath)) {
                                                     PostScript(L"window.onInfo('Abriendo ventana de vinculaci\u00f3n...')");
-                                                    // Ejecutar en una consola nueva y visible para que sea interactivo
-                                                    std::wstring cmd = L"cmd.exe /c \"\"" + ytdlpPath + L"\" --username oauth2 --password \"\" & pause\"";
+                                                    // Añadimos una URL de ejemplo para que yt-dlp active el extractor de YouTube
+                                                    std::wstring cmd = L"cmd.exe /c \"\"" + ytdlpPath + L"\" --username oauth2 --password \"\" https://www.youtube.com/watch?v=dQw4w9WgXcQ --ignore-errors & pause\"";
                                                     
                                                     STARTUPINFOW si = { sizeof(si) };
                                                     PROCESS_INFORMATION pi = {};
