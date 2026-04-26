@@ -19,10 +19,8 @@ static ComPtr<ICoreWebView2> g_webview;
 static HWND g_hwnd = nullptr;
 static const UINT WM_RUN_JS = WM_APP + 1;
 
-extern "C" {
-    extern const char _binary_yt_dlp_exe_start[];
-    extern const char _binary_yt_dlp_exe_end[];
-}
+// Resource-based embedding
+
 
 static const char HTML[] = R"html(<!DOCTYPE html>
 <html lang="es">
@@ -115,9 +113,13 @@ static bool ExtractEmbeddedYtDlp(std::wstring& outPath) {
 
     CreateDirectoryW(dir.c_str(), nullptr);
 
-    const char* start = _binary_yt_dlp_exe_start;
-    const char* end = _binary_yt_dlp_exe_end;
-    size_t size = static_cast<size_t>(end - start);
+    HRSRC hRes = FindResourceW(nullptr, L"YTDLP_EXE", L"BINARY");
+    if (!hRes) return false;
+    HGLOBAL hData = LoadResource(nullptr, hRes);
+    if (!hData) return false;
+    const char* start = static_cast<const char*>(LockResource(hData));
+    size_t size = SizeofResource(nullptr, hRes);
+
 
     std::ofstream out(ytdlpPath, std::ios::binary);
     if (!out) return false;

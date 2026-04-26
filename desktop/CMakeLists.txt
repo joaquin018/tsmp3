@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(tsmp3 VERSION 1.0.0 LANGUAGES CXX)
+project(tsmp3 VERSION 1.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,11 +10,7 @@ if(MSVC)
     add_link_options(/LTCG /OPT:REF /OPT:ICF)
 endif()
 
-add_executable(tsmp3 WIN32 main.cpp)
-
-# Link the objcopy-generated object containing yt-dlp.exe binary data
-set(YTDLP_OBJ "${CMAKE_CURRENT_SOURCE_DIR}/ytdlp.obj")
-target_link_libraries(tsmp3 PRIVATE ${YTDLP_OBJ})
+add_executable(tsmp3 WIN32 main.cpp resources.rc)
 
 target_include_directories(tsmp3 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/webview2/build/native/include
