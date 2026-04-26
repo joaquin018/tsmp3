@@ -52,11 +52,11 @@ button:hover{background:#e0e0e0} button:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
-<h1>YouTube to M4A</h1>
-<p class="subtitle">Descarga audio en alta calidad</p>
+<h1>YouTube to MP3</h1>
+<p class="subtitle">Descarga audio en alta fidelidad</p>
 <img id="thumb" src="" alt="">
 <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
-<button id="btn">Descargar M4A</button>
+<button id="btn">Descargar MP3</button>
 
 <div id="dl-container" class="progress-container">
     <div class="progress-label"><span>Descargando...</span><span id="dl-text">0%</span></div>
@@ -79,7 +79,7 @@ btn.addEventListener('click',()=>{const url=urlEl.value.trim();if(!url)return;bt
 window.onDownloadProgress=(pct,dlSize,totalSize)=>{dlFill.style.width=pct+'%';dlText.textContent=dlSize?dlSize+' / '+totalSize:pct+'%'};
 window.onConverting=()=>{dlFill.style.width='100%';dlText.textContent='100%';convCont.style.display='block';convFill.style.width='30%';convFill.classList.add('conv-indet');convText.textContent='procesando...'};
 window.onConvertingDone=()=>{convFill.classList.remove('conv-indet');convFill.style.width='100%';convText.textContent='listo'};
-window.onOk=m=>{btn.disabled=false;st.className='ok';st.textContent='✅ '+m;setTimeout(()=>{dlCont.style.display='none';convCont.style.display='none'},2000)};
+window.onOk=m=>{btn.disabled=false;st.className='ok';st.textContent='✅ '+m;setTimeout(()=>{dlCont.style.display='none';convCont.style.display='none'},3000)};
 window.onErr=m=>{btn.disabled=false;st.className='err';st.textContent='❌ '+m;dlCont.style.display='none';convCont.style.display='none'};
 window.onStatus=m=>{st.className='info';st.textContent=m};
 </script>
@@ -99,39 +99,50 @@ static void PostScript(const wchar_t* js) {
     PostMessageW(g_hwnd, WM_RUN_JS, 0, reinterpret_cast<LPARAM>(script));
 }
 
-static bool ExtractEmbeddedYtDlp(std::wstring& outPath) {
-    wchar_t tempPath[MAX_PATH];
-    GetTempPathW(MAX_PATH, tempPath);
-    std::wstring dir = std::wstring(tempPath) + L"tsmp3";
-    std::wstring ytdlpPath = dir + L"\\yt-dlp.exe";
-
-    DWORD attr = GetFileAttributesW(ytdlpPath.c_str());
+static bool ExtractResource(const wchar_t* resName, const std::wstring& targetPath) {
+    DWORD attr = GetFileAttributesW(targetPath.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
-        outPath = ytdlpPath;
         return true;
     }
 
-    CreateDirectoryW(dir.c_str(), nullptr);
-
-    HRSRC hRes = FindResourceW(nullptr, L"YTDLP_EXE", L"BINARY");
+    HRSRC hRes = FindResourceW(nullptr, resName, L"BINARY");
     if (!hRes) return false;
     HGLOBAL hData = LoadResource(nullptr, hRes);
     if (!hData) return false;
     const char* start = static_cast<const char*>(LockResource(hData));
     size_t size = SizeofResource(nullptr, hRes);
 
-
-    std::ofstream out(ytdlpPath, std::ios::binary);
+    std::ofstream out(targetPath, std::ios::binary);
     if (!out) return false;
     out.write(start, static_cast<std::streamsize>(size));
     out.close();
-
-    outPath = ytdlpPath;
     return true;
 }
 
-static bool FindYtDlp(std::wstring& outPath) {
-    if (ExtractEmbeddedYtDlp(outPath)) return true;
+static bool ExtractBinaries(std::wstring& ytdlpPath, std::wstring* ffmpegPath = nullptr) {
+    wchar_t tempPath[MAX_PATH];
+    GetTempPathW(MAX_PATH, tempPath);
+    std::wstring dir = std::wstring(tempPath) + L"tsmp3";
+    CreateDirectoryW(dir.c_str(), nullptr);
+
+    ytdlpPath = dir + L"\\yt-dlp.exe";
+    bool ok = ExtractResource(L"YTDLP_EXE", ytdlpPath);
+    if (ffmpegPath) {
+        *ffmpegPath = dir + L"\\ffmpeg.exe";
+        ok &= ExtractResource(L"FFMPEG_EXE", *ffmpegPath);
+    } else {
+        std::wstring ffmpegPathLocal = dir + L"\\ffmpeg.exe";
+        ok &= ExtractResource(L"FFMPEG_EXE", ffmpegPathLocal);
+    }
+    // Optional: ffprobe for future builds that include it
+    std::wstring ffprobePath = dir + L"\\ffprobe.exe";
+    ExtractResource(L"FFPROBE_EXE", ffprobePath);
+    
+    return ok;
+}
+
+static bool FindYtDlp(std::wstring& outPath, std::wstring* outFfmpeg = nullptr) {
+    if (ExtractBinaries(outPath, outFfmpeg)) return true;
 
     wchar_t selfPath[MAX_PATH];
     GetModuleFileNameW(nullptr, selfPath, MAX_PATH);
@@ -143,11 +154,53 @@ static bool FindYtDlp(std::wstring& outPath) {
     DWORD attr = GetFileAttributesW(localYtDlp.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
         outPath = localYtDlp;
+        if (outFfmpeg) {
+            std::wstring localFfmpeg = selfDir + L"\\ffmpeg.exe";
+            DWORD attr2 = GetFileAttributesW(localFfmpeg.c_str());
+            if (attr2 != INVALID_FILE_ATTRIBUTES && !(attr2 & FILE_ATTRIBUTE_DIRECTORY)) {
+                *outFfmpeg = localFfmpeg;
+            } else {
+                *outFfmpeg = L"ffmpeg.exe";
+            }
+        }
         return true;
     }
 
     outPath = L"yt-dlp.exe";
+    if (outFfmpeg) *outFfmpeg = L"ffmpeg.exe";
     return true;
+}
+
+static std::wstring SanitizeWinFilename(const std::wstring& name) {
+    std::wstring result = name;
+    const wchar_t* invalid = L"<>:\"/\\|?*";
+    for (auto& c : result) {
+        if (wcschr(invalid, c) != nullptr) c = L'_';
+        if (c < 32) c = L'_';
+    }
+    while (!result.empty() && (result.back() == L' ' || result.back() == L'.')) result.pop_back();
+    while (!result.empty() && result.front() == L' ') result.erase(result.begin());
+    if (result.empty()) result = L"audio";
+    return result;
+}
+
+static std::wstring FallbackMp3Name(const std::wstring& url) {
+    std::wstring id;
+    size_t p = url.find(L"youtu.be/");
+    if (p != std::wstring::npos) {
+        id = url.substr(p + 9);
+    } else {
+        p = url.find(L"v=");
+        if (p != std::wstring::npos) {
+            id = url.substr(p + 2);
+        } else {
+            p = url.find(L"v/");
+            if (p != std::wstring::npos) id = url.substr(p + 2);
+        }
+    }
+    size_t q = id.find_first_of(L"?&");
+    if (q != std::wstring::npos) id = id.substr(0, q);
+    return SanitizeWinFilename(id) + L".mp3";
 }
 
 static double ParseProgress(const std::string& line) {
@@ -222,7 +275,7 @@ static bool ParseDownloadInfo(const std::string& line, double& pct, std::string&
         return pct >= 0;
     }
 
-    // Formato clásico: "... 12.5% of   52.97MiB at ..."
+    // Formato clasico: "... 12.5% of   52.97MiB at ..."
     size_t ofPos = line.find(" of ");
     if (ofPos != std::string::npos) {
         size_t totalStart = ofPos + 4;
@@ -252,77 +305,84 @@ static void PostDownloadProgress(double pct, const std::string& dlSize = "", con
     PostScript(buf);
 }
 
-struct DownloadCtx {
+static std::wstring RunYtDlpAndCapture(const std::wstring& ytdlpPath, const std::wstring& args) {
+    SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
+    HANDLE hRead = nullptr, hWrite = nullptr;
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) return L"";
+    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+
+    HANDLE hNul = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+    STARTUPINFOW si = { sizeof(si) };
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdInput = nullptr;
+    si.hStdOutput = hWrite;
+    si.hStdError = (hNul != INVALID_HANDLE_VALUE) ? hNul : hWrite;
+    si.wShowWindow = SW_HIDE;
+
+    std::wstring cmd = L"\"" + ytdlpPath + L"\" " + args;
+    PROCESS_INFORMATION pi = {};
+    BOOL created = CreateProcessW(nullptr, const_cast<LPWSTR>(cmd.c_str()), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    CloseHandle(hWrite);
+    if (hNul != INVALID_HANDLE_VALUE) CloseHandle(hNul);
+
+    if (!created) {
+        CloseHandle(hRead);
+        return L"";
+    }
+
+    std::string output;
+    char buf[4096];
+    DWORD read = 0;
+    while (ReadFile(hRead, buf, sizeof(buf) - 1, &read, nullptr) && read > 0) {
+        buf[read] = '\0';
+        output += buf;
+    }
+    CloseHandle(hRead);
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exitCode = 0;
+    GetExitCodeProcess(pi.hProcess, &exitCode);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    if (exitCode != 0) return L"";
+
+    while (!output.empty() && (output.back() == '\n' || output.back() == '\r' || output.back() == ' '))
+        output.pop_back();
+
+    return Utf8ToWstr(output.c_str());
+}
+
+struct JobCtx {
     HANDLE hProcess;
     std::string logPath;
+    std::wstring tempFile;
+    std::wstring finalMp3Path;
+    std::wstring ffmpegPath;
 };
 
 static DWORD WINAPI MonitorThread(LPVOID param) {
-    DownloadCtx* ctx = static_cast<DownloadCtx*>(param);
+    JobCtx* ctx = static_cast<JobCtx*>(param);
     HANDLE hProcess = ctx->hProcess;
     std::string logPath = ctx->logPath;
+    std::wstring tempFile = ctx->tempFile;
+    std::wstring finalMp3Path = ctx->finalMp3Path;
+    std::wstring ffmpegPath = ctx->ffmpegPath;
     delete ctx;
 
     double lastPct = -1.0;
     std::string lastDlSize, lastTotalSize;
     std::streampos lastPos = 0;
     DWORD startTick = GetTickCount();
-    bool convertingSent = false;
+    std::string lastErrorLine;
 
-    while (true) {
-        // Check if process still running
-        DWORD exitCode = STILL_ACTIVE;
-        if (hProcess) {
-            GetExitCodeProcess(hProcess, &exitCode);
-        }
-
-        // Read new data from log file
-        std::ifstream log(logPath, std::ios::in);
-        if (log.is_open()) {
-            // Seek to last position
-            log.seekg(0, std::ios::end);
-            std::streampos fileSize = log.tellg();
-            
-            if (fileSize > lastPos) {
-                log.seekg(lastPos);
-                std::string line;
-                while (std::getline(log, line)) {
-                    if (!line.empty() && line.back() == '\r') line.pop_back();
-                    if (line.find("[download]") != std::string::npos) {
-                        double pct; std::string dlSize, totalSize;
-                        if (ParseDownloadInfo(line, pct, dlSize, totalSize)) {
-                            if (pct >= 0.0 && pct != lastPct) {
-                                lastPct = pct;
-                                lastDlSize = dlSize;
-                                lastTotalSize = totalSize;
-                                PostDownloadProgress(pct, dlSize, totalSize);
-                            }
-                        }
-                    } else if (!convertingSent && (line.find("[ExtractAudio]") != std::string::npos || line.find("[ffmpeg]") != std::string::npos || line.find("Deleting") != std::string::npos)) {
-                        PostScript(L"window.onConverting()");
-                        convertingSent = true;
-                    }
-                }
-                lastPos = fileSize;
-            }
-            log.close();
-        }
-
-        if (exitCode != STILL_ACTIVE) break;
-
-        // Safety timeout: avoids leaving the UI stuck forever if yt-dlp hangs.
-        if (GetTickCount() - startTick > 30 * 60 * 1000) {
-            TerminateProcess(hProcess, 124);
-            break;
-        }
-
-        Sleep(150);
-    }
-
-    // Read any remaining log data
-    {
-        std::ifstream log(logPath, std::ios::in);
-        if (log.is_open()) {
+    auto readLog = [&](bool untilEnd) {
+        std::ifstream log(logPath, std::ios::in | std::ios::binary);
+        if (!log.is_open()) return;
+        log.seekg(0, std::ios::end);
+        std::streampos fileSize = log.tellg();
+        if (fileSize > lastPos) {
             log.seekg(lastPos);
             std::string line;
             while (std::getline(log, line)) {
@@ -332,39 +392,112 @@ static DWORD WINAPI MonitorThread(LPVOID param) {
                     if (ParseDownloadInfo(line, pct, dlSize, totalSize)) {
                         if (pct >= 0.0 && pct != lastPct) {
                             lastPct = pct;
+                            lastDlSize = dlSize;
+                            lastTotalSize = totalSize;
                             PostDownloadProgress(pct, dlSize, totalSize);
                         }
                     }
-                } else if (!convertingSent && (line.find("[ExtractAudio]") != std::string::npos || line.find("[ffmpeg]") != std::string::npos || line.find("Deleting") != std::string::npos)) {
-                    PostScript(L"window.onConverting()");
-                    convertingSent = true;
+                } else if (line.find("ERROR:") != std::string::npos) {
+                    lastErrorLine = line;
                 }
             }
-            log.close();
+            if (!untilEnd) lastPos = fileSize;
         }
+    };
+
+    while (true) {
+        DWORD exitCode = STILL_ACTIVE;
+        if (hProcess) {
+            GetExitCodeProcess(hProcess, &exitCode);
+        }
+
+        readLog(exitCode != STILL_ACTIVE);
+
+        if (exitCode != STILL_ACTIVE) break;
+
+        if (GetTickCount() - startTick > 30 * 60 * 1000) {
+            TerminateProcess(hProcess, 124);
+            break;
+        }
+
+        Sleep(150);
     }
 
-    // Signal conversion completion
-    if (convertingSent) {
-        PostScript(L"window.onConvertingDone()");
-    }
-
-    // Get final exit code
     DWORD exitCode = 0;
     if (hProcess) {
         GetExitCodeProcess(hProcess, &exitCode);
         CloseHandle(hProcess);
     }
 
-    // Clean up log file
     DeleteFileA(logPath.c_str());
 
-    if (exitCode == 0) {
-        PostDownloadProgress(100.0, lastDlSize, lastTotalSize);
+    if (exitCode != 0) {
+        if (!lastErrorLine.empty()) {
+            std::wstring wErr = Utf8ToWstr(lastErrorLine.c_str());
+            std::wstring jsErr;
+            for (wchar_t c : wErr) {
+                if (c == L'\'') jsErr += L"\\'";
+                else if (c == L'\\') jsErr += L"\\\\";
+                else jsErr += c;
+            }
+            if (jsErr.length() > 200) jsErr = jsErr.substr(0, 200) + L"...";
+            wchar_t errBuf[512];
+            swprintf(errBuf, 512, L"window.onErr('%s')", jsErr.c_str());
+            PostScript(errBuf);
+        } else {
+            wchar_t errBuf[256];
+            swprintf(errBuf, 256, L"window.onErr('Error en la descarga (c\u00f3digo %lu)')", exitCode);
+            PostScript(errBuf);
+        }
+        return 0;
+    }
+
+    // Verify downloaded file exists
+    DWORD attr = GetFileAttributesW(tempFile.c_str());
+    if (attr == INVALID_FILE_ATTRIBUTES) {
+        PostScript(L"window.onErr('No se encontr\u00f3 el archivo descargado')");
+        return 0;
+    }
+
+    PostDownloadProgress(100.0, lastDlSize, lastTotalSize);
+    PostScript(L"window.onConverting()");
+
+    // Run ffmpeg to convert to MP3
+    SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
+    HANDLE hNulIn = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+    std::wstring args = L"\"" + ffmpegPath + L"\" -i \"" + tempFile + L"\" -vn -ar 44100 -ac 2 -b:a 192k \"" + finalMp3Path + L"\" -y";
+    STARTUPINFOW si = { sizeof(si) };
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdInput = (hNulIn != INVALID_HANDLE_VALUE) ? hNulIn : nullptr;
+    si.hStdOutput = nullptr;
+    si.hStdError = nullptr;
+    si.wShowWindow = SW_HIDE;
+
+    PROCESS_INFORMATION pi = {};
+    BOOL created = CreateProcessW(nullptr, const_cast<LPWSTR>(args.c_str()), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    if (hNulIn != INVALID_HANDLE_VALUE) CloseHandle(hNulIn);
+
+    if (!created) {
+        DeleteFileW(tempFile.c_str());
+        PostScript(L"window.onErr('No se pudo iniciar ffmpeg')");
+        return 0;
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD fExitCode = 0;
+    GetExitCodeProcess(pi.hProcess, &fExitCode);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    DeleteFileW(tempFile.c_str());
+
+    if (fExitCode == 0) {
+        PostScript(L"window.onConvertingDone()");
         PostScript(L"window.onOk('Descarga completada en Downloads')");
     } else {
         wchar_t errBuf[256];
-        swprintf(errBuf, 256, L"window.onErr('Error en la descarga (c\\u00f3digo %lu)')", exitCode);
+        swprintf(errBuf, 256, L"window.onErr('Error en la conversi\u00f3n (c\u00f3digo %lu)')", fExitCode);
         PostScript(errBuf);
     }
 
@@ -373,8 +506,9 @@ static DWORD WINAPI MonitorThread(LPVOID param) {
 
 static void RunDownload(const std::wstring& url) {
     std::wstring ytdlpPath;
-    if (!FindYtDlp(ytdlpPath)) {
-        PostScript(L"window.onErr('No se encontr\\u00f3 yt-dlp embebido ni en PATH')");
+    std::wstring ffmpegPath;
+    if (!FindYtDlp(ytdlpPath, &ffmpegPath)) {
+        PostScript(L"window.onErr('No se encontr\u00f3 yt-dlp embebido ni en PATH')");
         return;
     }
 
@@ -383,18 +517,32 @@ static void RunDownload(const std::wstring& url) {
         PostScript(L"window.onErr('No se pudo obtener carpeta Downloads')");
         return;
     }
-    std::wstring outTemplate = std::wstring(profile) + L"\\Downloads\\%(title)s.%(ext)s";
 
-    // Create temp log file for stderr
+    // 1. Determine output MP3 filename (ask yt-dlp for sanitized title)
+    std::wstring mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
+    if (mp3Filename.empty()) {
+        mp3Filename = FallbackMp3Name(url);
+    } else {
+        mp3Filename = SanitizeWinFilename(mp3Filename);
+    }
+    std::wstring finalMp3Path = std::wstring(profile) + L"\\Downloads\\" + mp3Filename;
+
+    // 2. Prepare temp download path
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
+    std::wstring tempDir = std::wstring(tempPath) + L"tsmp3";
+    CreateDirectoryW(tempDir.c_str(), nullptr);
+    std::wstring tempFile = tempDir + L"\\tsmp3_dl";
+    DeleteFileW(tempFile.c_str());
+
+    // 3. Create temp log file for stderr (UTF-8 for paths)
     wchar_t logFile[MAX_PATH];
     GetTempFileNameW(tempPath, L"tsmp3", 0, logFile);
     std::string logPathA;
     {
-        int len = WideCharToMultiByte(CP_ACP, 0, logFile, -1, nullptr, 0, nullptr, nullptr);
+        int len = WideCharToMultiByte(CP_UTF8, 0, logFile, -1, nullptr, 0, nullptr, nullptr);
         logPathA.resize(len - 1);
-        WideCharToMultiByte(CP_ACP, 0, logFile, -1, logPathA.data(), len, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, logFile, -1, logPathA.data(), len, nullptr, nullptr);
     }
 
     SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
@@ -423,9 +571,8 @@ static void RunDownload(const std::wstring& url) {
         nullptr
     );
 
-    // Launch yt-dlp directly. stdout and stderr go to the same temp log file.
     std::wstring args = L"\"" + ytdlpPath + L"\" -f bestaudio --no-playlist --newline --progress -o \""
-        + outTemplate + L"\" \"" + url + L"\"";
+        + tempFile + L"\" \"" + url + L"\"";
 
     STARTUPINFOW si = { sizeof(si) };
     si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
@@ -456,8 +603,7 @@ static void RunDownload(const std::wstring& url) {
 
     CloseHandle(pi.hThread);
 
-    // Start monitor thread
-    DownloadCtx* ctx = new DownloadCtx{ pi.hProcess, logPathA };
+    JobCtx* ctx = new JobCtx{ pi.hProcess, logPathA, tempFile, finalMp3Path, ffmpegPath };
     HANDLE hThread = CreateThread(nullptr, 0, MonitorThread, ctx, 0, nullptr);
     if (hThread) CloseHandle(hThread);
 }
