@@ -472,7 +472,7 @@ static void RunDownload(const std::wstring& url) {
     }
 
     // 1. Determine output MP3 filename (ask yt-dlp for sanitized title)
-    std::wstring mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--no-fixup --print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
+    std::wstring mp3Filename = RunYtDlpAndCapture(ytdlpPath, L"--fixup never --print filename -o \"%(title)s.mp3\" \"" + url + L"\"");
     if (mp3Filename.empty()) {
         mp3Filename = FallbackMp3Name(url);
     } else {
@@ -524,7 +524,7 @@ static void RunDownload(const std::wstring& url) {
         nullptr
     );
 
-    std::wstring args = L"\"" + ytdlpPath + L"\" -f ba[ext=m4a]/ba --no-fixup --no-playlist --newline --progress -o \""
+    std::wstring args = L"\"" + ytdlpPath + L"\" -f ba[ext=m4a]/ba --fixup never --no-playlist --newline --progress -o \""
         + tempFile + L"\" \"" + url + L"\"";
 
     STARTUPINFOW si = { sizeof(si) };
