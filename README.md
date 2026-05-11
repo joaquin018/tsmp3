@@ -9,7 +9,12 @@ Puedes bajar el ejecutable directo desde la sección de **[Releases](https://git
 1. `pip install -r requirements.txt`
 2. `python gui_downloader.py`
 
-*Nota: Requiere `ffmpeg` en la carpeta `bin/`.*
+## ⚙️ Tecnologías
+- **Lenguaje**: Python 3.12+
+- **Interfaz**: CustomTkinter
+- **Motor de descarga**: yt-dlp
+- **Procesamiento de audio**: FFmpeg
+- **Empaquetado**: PyInstaller
 
 ---
 MIT License - 2025
