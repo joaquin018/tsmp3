@@ -1,17 +1,20 @@
-# WebView2 runtime data (generado al ejecutar la app)
-tsmp3.exe.WebView2/
-ymp3.exe.WebView2/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
 
-# Build output
-desktop/build/
+# Project Specific
+downloads/
+TSMP3.exe
+TSMP3-Downloader.exe
 
-# Binaries generados
-tsmp3.exe
-*.obj
+# Build
+build/
+dist/
+*.spec
 
-# macOS
+# System
 .DS_Store
-
-# IDE
-.idea/
-.vscode/
+Thumbs.db

@@ -1,30 +1,40 @@
-# TSMP3
+# TSMP3 v2.0 (Python Edition)
 
-Descarga audio de YouTube en MP3. App nativa para Windows.
+Descarga audio de YouTube en MP3 con la máxima calidad y una interfaz moderna. Esta versión ha sido reconstruida completamente en Python para mayor facilidad de mantenimiento y portabilidad.
 
-## Descargar
+## ✨ Características
 
-[Última versión](https://github.com/joaquin018/tstmp3/releases/latest)
+*   **Pega y descarga**: Solo pega el link de YouTube o SoundCloud y obtén tu MP3 en segundos.
+*   **Vista previa**: Carga automáticamente la miniatura del video al detectar la URL.
+*   **Calidad máxima**: Extrae audio a 320kbps usando `yt-dlp` y `ffmpeg`.
+*   **Metadata inteligente**: Incrusta automáticamente artista, título y carátula en el archivo.
+*   **Totalmente Portable**: Un único archivo `.exe` que contiene todo lo necesario.
 
-## Características
+## 🚀 Instalación y Uso
 
-- Pega un link de YouTube y obtén MP3 en segundos
-- Calidad máxima (yt-dlp + ffmpeg)
-- Sin anuncios, sin trackers, 100% open source
-- Ejecutable portable de ~18 MB
-- UI moderna con tema oscuro (WebView2)
+### Para usuarios finales
+1.  Ve a la sección de [Releases](https://github.com/joaquin018/tsmp3/releases).
+2.  Descarga `TSMP3.exe`.
+3.  Ejecútalo y ¡listo! No requiere instalación.
 
-## Requisitos
+### Para desarrolladores (Entorno de desarrollo)
+Si quieres ejecutar el código fuente o modificarlo:
 
-- Windows 10/11 (64-bit)
-- WebView2 Runtime (incluido en Windows 11, descargable en Windows 10)
+1.  Clona el repositorio.
+2.  Crea un entorno virtual: `python -m venv venv`.
+3.  Instala las dependencias: `pip install -r requirements.txt`.
+4.  Ejecuta el programa: `python gui_downloader.py`.
 
-## Tecnologías
+*Nota: Requiere tener `ffmpeg` en una carpeta `bin/` o instalado en el sistema.*
 
-- C++17, Win32 API, WebView2
-- yt-dlp embebido
-- Landing: HTML/CSS puro + Docker/Nginx
+## 🛠 Tecnologías
 
-## Licencia
+*   **Lenguaje**: Python 3.12+
+*   **Interfaz**: CustomTkinter
+*   **Motor de descarga**: yt-dlp
+*   **Procesamiento de audio**: FFmpeg
+*   **Empaquetado**: PyInstaller
 
-MIT
+## 📄 Licencia
+
+MIT - Joaquín 2025
