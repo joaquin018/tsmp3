@@ -139,9 +139,14 @@ class App(ctk.CTk):
         else:
             ffmpeg_path = os.path.join(os.getcwd(), 'bin')
 
-        downloads_dir = os.path.join(os.getcwd(), 'downloads')
+        # Ruta a la carpeta de descargas del usuario de Windows
+        downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+        
+        # Si por alguna razón no existe (poco probable en Windows), crear una local
         if not os.path.exists(downloads_dir):
-            os.makedirs(downloads_dir)
+            downloads_dir = os.path.join(os.getcwd(), 'downloads')
+            if not os.path.exists(downloads_dir):
+                os.makedirs(downloads_dir)
 
         ydl_opts = {
             'format': 'bestaudio/best',
