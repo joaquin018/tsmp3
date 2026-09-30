@@ -6,6 +6,7 @@ from io import BytesIO
 import customtkinter as ctk
 from PIL import Image
 import yt_dlp
+from download_config import ffmpeg_location, resource_dir, runtime_options
 
 # Configuración estética
 ctk.set_appearance_mode("dark")
@@ -16,7 +17,7 @@ def resource_path(relative_path):
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
-        base_path = os.path.abspath(".")
+        base_path = resource_dir()
     return os.path.join(base_path, relative_path)
 
 class App(ctk.CTk):
@@ -83,7 +84,7 @@ class App(ctk.CTk):
         self.download_btn.pack(pady=10)
 
         # Estado e Info
-        self.status_label = ctk.CTkLabel(self.main_card, text="", font=("Segoe UI", 12), text_color="gray")
+        self.status_label = ctk.CTkLabel(self.main_card, text="", font=("Segoe UI", 12), text_color="gray", wraplength=320)
         self.status_label.pack(pady=10)
 
     def update_thumbnail_event(self, event):
@@ -93,7 +94,7 @@ class App(ctk.CTk):
 
     def load_thumbnail(self, url):
         try:
-            ydl_opts = {'quiet': True, 'no_warnings': True}
+            ydl_opts = {**runtime_options(), 'quiet': True}
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 thumb_url = info.get('thumbnail')
@@ -133,12 +134,6 @@ class App(ctk.CTk):
         threading.Thread(target=self.download_logic, args=(url,), daemon=True).start()
 
     def download_logic(self, url):
-        # Determinar ubicación de ffmpeg
-        if getattr(sys, 'frozen', False):
-            ffmpeg_path = sys._MEIPASS
-        else:
-            ffmpeg_path = os.path.join(os.getcwd(), 'bin')
-
         # Ruta a la carpeta de descargas del usuario de Windows
         downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
         
@@ -151,7 +146,6 @@ class App(ctk.CTk):
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': os.path.join(downloads_dir, '%(title)s.%(ext)s'),
-            'ffmpeg_location': ffmpeg_path,
             'postprocessors': [
                 {
                     'key': 'FFmpegExtractAudio',
@@ -164,17 +158,19 @@ class App(ctk.CTk):
                 }
             ],
             'quiet': True,
-            'no_warnings': True
         }
 
         try:
+            ydl_opts.update(runtime_options())
+            ydl_opts['ffmpeg_location'] = ffmpeg_location()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-            self.status_label.configure(text="✅ Descarga completada", text_color="#55FF55")
+            self.after(0, lambda: self.status_label.configure(text="✅ Descarga completada", text_color="#55FF55"))
         except Exception as e:
-            self.status_label.configure(text=f"❌ Error en descarga", text_color="#FF5555")
-        
-        self.download_btn.configure(state="normal", text="Descargar MP3")
+            message = f"❌ {e}"
+            self.after(0, lambda text=message: self.status_label.configure(text=text, text_color="#FF5555"))
+        finally:
+            self.after(0, lambda: self.download_btn.configure(state="normal", text="Descargar MP3"))
 
 if __name__ == "__main__":
     app = App()

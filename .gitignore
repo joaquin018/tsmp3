@@ -14,6 +14,7 @@ TSMP3-Downloader.exe
 build/
 dist/
 *.spec
+*.log
 
 # System
 .DS_Store

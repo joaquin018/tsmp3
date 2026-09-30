@@ -1,5 +1,6 @@
 import os
 import yt_dlp
+from download_config import ffmpeg_location, runtime_options
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TaskProgressColumn
@@ -52,15 +53,15 @@ class MP3Downloader:
                     'key': 'EmbedThumbnail',
                 }
             ],
-            'ffmpeg_location': os.path.join(os.getcwd(), 'bin'),
             'writethumbnail': True,
             'quiet': True,
-            'no_warnings': True,
             # Logger to handle status messages
             'logger': MyLogger(),
         }
 
         try:
+            ydl_opts.update(runtime_options())
+            ydl_opts['ffmpeg_location'] = ffmpeg_location()
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -95,7 +96,8 @@ class MP3Downloader:
 
 class MyLogger:
     def debug(self, msg): pass
-    def warning(self, msg): pass
+    def warning(self, msg):
+        console.print(str(msg), style="warning", markup=False)
     def error(self, msg):
         console.print(f"[error]{msg}[/]")
 
