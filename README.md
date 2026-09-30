@@ -2,6 +2,12 @@
 
 Descarga audio de YouTube y conviértelo a MP3 con yt-dlp y FFmpeg.
 
+## Descargar para Windows
+
+[Descargar TSMP3 v2.0.2](https://github.com/joaquin018/tsmp3/releases/download/v2.0.2/TSMP3.exe).
+El ejecutable incluye Python, yt-dlp/EJS, Node y FFmpeg. No requiere instalarlos
+por separado. Compatible con Windows 10/11 de 64 bits.
+
 ## Ejecutar en Windows
 
 Requiere Python 3.12+ y Node.js 22+ o Deno 2.3+ disponibles en PATH.
@@ -54,8 +60,17 @@ El extra `yt-dlp[default]` instala la versión compatible de `yt-dlp-ejs`.
 La aplicación habilita Node o Deno cuando están disponibles y busca FFmpeg
 en `bin/`, independientemente del directorio desde el que se abra.
 
-Este tag publica el código corregido. Los ejecutables anteriores conservan sus
-dependencias originales; actualizar el entorno Python no los actualiza.
+## Compilar el ejecutable
+
+Con las dependencias de desarrollo instaladas, ejecuta:
+
+```powershell
+.\venv\Scripts\python.exe build_windows.py
+```
+
+Genera `dist/TSMP3.exe` con Node, FFmpeg y FFprobe incluidos. Los ejecutables
+conservan las dependencias con las que se compilaron: para actualizarlos,
+descarga una nueva release o vuelve a compilar.
 
 Referencias oficiales: [versiones de yt-dlp](https://github.com/yt-dlp/yt-dlp/releases/latest)
 y [requisitos JavaScript/EJS](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
